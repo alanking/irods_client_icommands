@@ -17,6 +17,7 @@
 #include <boost/lexical_cast.hpp>
 
 #include <nlohmann/json.hpp>
+#include <fmt/format.h>
 
 #include <iostream>
 #include <fstream>
@@ -102,7 +103,6 @@ int main( int argc, char **argv )
     rcComm_t *Conn = 0;
     rErrMsg_t errMsg;
     rodsArguments_t myRodsArgs;
-    int doPassword = 0;
     bool doingEnvFileUpdate = false;
 
     status = parseCmdLineOpt( argc, argv, "ehvVlZ", 1, &myRodsArgs );
@@ -140,14 +140,14 @@ int main( int argc, char **argv )
     if ( myRodsArgs.ttl == True ) {
         ttl = myRodsArgs.ttlValue;
         if ( ttl < 1 ) {
-            printf( "Time To Live value needs to be a positive integer\n" );
+            fmt::print(stderr, "Time To Live value needs to be a positive integer\n");
             return 1;
         }
     }
 
     ix = myRodsArgs.optind;
 
-    const char *password = "";
+    const char *password = nullptr;
     if ( ix < argc ) {
         password = argv[ix];
     }
@@ -235,53 +235,6 @@ int main( int argc, char **argv )
         printf( "other iCommands) if the login succeeds.\n\n" );
     }
 
-    /*
-      Now, get the password
-     */
-    doPassword = 1;
-    // =-=-=-=-=-=-=-
-    // ensure scheme is lower case for comparison
-    std::string lower_scheme = my_env.rodsAuthScheme;
-    std::transform(
-        lower_scheme.begin(),
-        lower_scheme.end(),
-        lower_scheme.begin(),
-        ::tolower );
-
-    int useGsi = 0;
-    if ( AUTH_OPENID_SCHEME == lower_scheme ) {
-        doPassword = 0;
-    }
-    if ( irods::AUTH_GSI_SCHEME == lower_scheme ) {
-        useGsi = 1;
-        doPassword = 0;
-    }
-
-    if ( irods::AUTH_PAM_SCHEME == lower_scheme ) {
-        doPassword = 0;
-    }
-
-    if ( strcmp( my_env.rodsUserName, ANONYMOUS_USER ) == 0 ) {
-        doPassword = 0;
-    }
-    if ( useGsi == 1 ) {
-        printf( "Using GSI, attempting connection/authentication\n" );
-    }
-    if ( doPassword == 1 ) {
-        if ( myRodsArgs.verbose == True ) {
-            i = obfSavePw( echoFlag, 1, 1, password );
-        }
-        else {
-            i = obfSavePw( echoFlag, 0, 0, password );
-        }
-
-        if ( i != 0 ) {
-            rodsLogError( LOG_ERROR, i, "Save Password failure" );
-            return 1;
-        }
-    }
-
-    // =-=-=-=-=-=-=-
     // initialize pluggable api table
     irods::api_entry_table&  api_tbl = irods::get_client_api_table();
     irods::pack_entry_table& pk_tbl  = irods::get_pack_table();
@@ -290,119 +243,23 @@ int main( int argc, char **argv )
     /* Connect... */
     Conn = rcConnect( my_env.rodsHost, my_env.rodsPort, my_env.rodsUserName,
                       my_env.rodsZone, 0, &errMsg );
-    if ( Conn == NULL ) {
-        rodsLog( LOG_ERROR,
-                 "Saved password, but failed to connect to server %s",
-                 my_env.rodsHost );
+    if (!Conn) {
+        fmt::print("Saved password, but failed to connect to server {}", my_env.rodsHost);
         return 2;
     }
 
-    // =-=-=-=-=-=-=-
-    // PAM auth gets special consideration, and also includes an
-    // auth by the usual convention
-    bool pam_flg = false;
-    const auto use_legacy_authentication = irods::experimental::auth::use_legacy_authentication(*Conn);
-    if (use_legacy_authentication && irods::AUTH_PAM_SCHEME == lower_scheme) {
-        // =-=-=-=-=-=-=-
-        // set a flag stating that we have done pam and the auth
-        // scheme needs overridden
-        pam_flg = true;
-
-        // =-=-=-=-=-=-=-
-        // build a context string which includes the ttl and password
-        std::stringstream ttl_str;  ttl_str << ttl;
-		irods::kvp_map_t ctx_map;
-		ctx_map[ irods::AUTH_TTL_KEY ] = ttl_str.str();
-		ctx_map[ irods::AUTH_PASSWORD_KEY ] = password;
-		std::string ctx_str = irods::escaped_kvp_string(
-		                          ctx_map);
-        // =-=-=-=-=-=-=-
-        // pass the context with the ttl as well as an override which
-        // demands the pam authentication plugin
-        status = clientLogin( Conn, ctx_str.c_str(), irods::AUTH_PAM_SCHEME.c_str() );
-        if ( status != 0 ) {
-            return 8;
-        }
-
-        // =-=-=-=-=-=-=-
-        // if this succeeded, do the regular login below to check
-        // that the generated password works properly.
-    } // if pam
-
-    if ( strcmp( my_env.rodsAuthScheme, AUTH_OPENID_SCHEME ) == 0 ) {
-        irods::kvp_map_t ctx_map;
-        try {
-            std::string client_provider_cfg = irods::get_environment_property<std::string&>( "openid_provider" );
-            ctx_map["provider"] = client_provider_cfg;
-        }
-        catch ( const irods::exception& e ) {
-            if ( e.code() == KEY_NOT_FOUND ) {
-                rodsLog( LOG_NOTICE, "KEY_NOT_FOUND: openid_provider not defined" );
-            }
-            else {
-                rodsLog( LOG_DEBUG, "unknown error" );
-                irods::log( e );
-            }
-        }
-        ctx_map["nobuildctx"] = "1";
-        ctx_map["reprompt"] = "1";
-        if ( password && *password ) {
-            // for openid, if password not empty send as initialization value
-            ctx_map["iinit_arg"] = password;
-        }
-
-        std::string ctx_str = irods::escaped_kvp_string( ctx_map );
-        status = clientLogin( Conn, ctx_str.c_str(), AUTH_OPENID_SCHEME );
-        if ( status != 0 ) {
-            rcDisconnect( Conn );
-            return 7;
-        }
+    nlohmann::json ctx;
+    if (password) {
+        ctx[irods::AUTH_PASSWORD_KEY] = password;
     }
-    else {
-        if (use_legacy_authentication) {
-            // =-=-=-=-=-=-=-
-            // since we might be using PAM
-            // and check that the user/password is OK
-            const char* auth_scheme = ( pam_flg ) ?
-                                  irods::AUTH_NATIVE_SCHEME.c_str() :
-                                  my_env.rodsAuthScheme;
-            status = clientLogin( Conn, 0, auth_scheme );
-            if ( status != 0 ) {
-                rcDisconnect( Conn );
-                return 7;
-            }
 
-            printErrorStack( Conn->rError );
-            if ( ttl > 0 && !pam_flg ) {
-                /* if doing non-PAM TTL, now get the
-                short-term password (after initial login) */
-                status = clientLoginTTL( Conn, ttl );
-                if ( status != 0 ) {
-                    rcDisconnect( Conn );
-                    return 8;
-                }
-                /* And check that it works */
-                status = clientLogin( Conn );
-                if ( status != 0 ) {
-                    rcDisconnect( Conn );
-                    return 7;
-                }
-            }
-        }
-        else {
-            nlohmann::json ctx;
-            if (irods::AUTH_PAM_SCHEME == lower_scheme) {
-                ctx = nlohmann::json{
-                    {irods::AUTH_TTL_KEY, std::to_string(ttl)},
-                    {irods::AUTH_PASSWORD_KEY, password}
-                };
-            }
+    if (ttl > 0) {
+        ctx[irods::AUTH_TTL_KEY] = std::to_string(ttl);
+    }
 
-            if (const int ec = clientLogin(Conn, ctx.dump().data()); ec != 0) {
-                rcDisconnect(Conn);
-                return 7;
-            }
-        }
+    if (const int ec = clientLogin(Conn, ctx.dump().data()); ec != 0) {
+        rcDisconnect(Conn);
+        return 7;
     }
 
     rcDisconnect( Conn );
