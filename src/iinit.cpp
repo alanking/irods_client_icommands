@@ -98,21 +98,17 @@ int main( int argc, char **argv )
 {
     signal( SIGPIPE, SIG_IGN );
 
-    int echoFlag = 0;
     rcComm_t *Conn = 0;
     rErrMsg_t errMsg;
     rodsArguments_t myRodsArgs;
     bool doingEnvFileUpdate = false;
 
-    int status = parseCmdLineOpt( argc, argv, "ehvVlZ", 1, &myRodsArgs );
+    int status = parseCmdLineOpt( argc, argv, "hvVlZ", 1, &myRodsArgs );
     if ( status != 0 ) {
         printf( "Use -h for help.\n" );
         return 1;
     }
 
-    if ( myRodsArgs.echo == True ) {
-        echoFlag = 1;
-    }
 
     if ( myRodsArgs.help == True && myRodsArgs.ttl == True ) {
         usageTTL();
@@ -308,7 +304,6 @@ void usage( char *prog ) {
     printf( "Creates a file containing your iRODS password in a scrambled form,\n" );
     printf( "to be used automatically by the icommands.\n" );
     printf( "Usage: %s [-ehvVl] [--ttl TimeToLive] [password]\n", prog );
-    printf( " -e  echo the password as you enter it (normally there is no echo)\n" );
     printf( " -l  list the iRODS environment variables (only)\n" );
     printf( " -v  verbose\n" );
     printf( " -V  Very verbose\n" );
