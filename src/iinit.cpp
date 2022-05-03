@@ -98,14 +98,13 @@ int main( int argc, char **argv )
 {
     signal( SIGPIPE, SIG_IGN );
 
-    int i = 0, ix = 0, status = 0;
     int echoFlag = 0;
     rcComm_t *Conn = 0;
     rErrMsg_t errMsg;
     rodsArguments_t myRodsArgs;
     bool doingEnvFileUpdate = false;
 
-    status = parseCmdLineOpt( argc, argv, "ehvVlZ", 1, &myRodsArgs );
+    int status = parseCmdLineOpt( argc, argv, "ehvVlZ", 1, &myRodsArgs );
     if ( status != 0 ) {
         printf( "Use -h for help.\n" );
         return 1;
@@ -145,7 +144,7 @@ int main( int argc, char **argv )
         }
     }
 
-    ix = myRodsArgs.optind;
+    int ix = myRodsArgs.optind;
 
     const char *password = nullptr;
     if ( ix < argc ) {
