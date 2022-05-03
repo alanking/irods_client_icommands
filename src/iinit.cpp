@@ -24,6 +24,27 @@
 void usage( char *prog );
 void usageTTL();
 
+namespace
+{
+    int initialize_irods_environment(RodsEnvironment& _env)
+    {
+        constexpr bool always_return_valid_env = false;
+        if (const int ec = get_irods_environment_from_file(_env, always_return_valid_env); ec < 0) {
+            return ec;
+        }
+
+        if (const int ec = getRodsEnvFromEnv(_env); ec < 0) {
+            return ec;
+        }
+
+        if (const int ec = createRodsEnvDefaults(_env); ec < 0) {
+            return ec;
+        }
+
+        return 0;
+    } // initialize_irods_environment
+} // anonymous namespace
+
 /* Uncomment the line below if you want TTL to be required for all
    users; i.e. all credentials will be time-limited.  This is only
    enforced on the client side so users can bypass this restriction by
@@ -78,7 +99,6 @@ int main( int argc, char **argv )
 
     int i = 0, ix = 0, status = 0;
     int echoFlag = 0;
-    rodsEnv my_env;
     rcComm_t *Conn = 0;
     rErrMsg_t errMsg;
     rodsArguments_t myRodsArgs;
@@ -109,10 +129,10 @@ int main( int argc, char **argv )
         printRodsEnv( stdout );
     }
 
-    status = getRodsEnv( &my_env );
-    if ( status < 0 ) {
-        rodsLog( LOG_ERROR, "main: getRodsEnv error. status = %d",
-                 status );
+    rodsEnv my_env{};
+
+    if (const int ec = initialize_irods_environment(my_env); ec < 0) {
+        fmt::print(stderr, "Failed to initialize iRODS environment. [{}]\n", ec);
         return 1;
     }
 
