@@ -22,7 +22,6 @@
 #include <fstream>
 
 void usage( char *prog );
-void usageTTL();
 
 /* Uncomment the line below if you want TTL to be required for all
    users; i.e. all credentials will be time-limited.  This is only
@@ -72,29 +71,15 @@ printUpdateMsg() {
     printf( "missing; please enter them.\n" );
 }
 
-int main( int argc, char **argv )
+int main(int argc, char** argv)
 {
     signal( SIGPIPE, SIG_IGN );
 
-    int ix = 0, status = 0;
-    int echoFlag = 0;
-    rodsEnv my_env;
-    rErrMsg_t errMsg;
     rodsArguments_t myRodsArgs;
-
-    status = parseCmdLineOpt( argc, argv, "ehvVlZ", 1, &myRodsArgs );
+    int status = parseCmdLineOpt( argc, argv, "hVlZ", 1, &myRodsArgs );
     if ( status != 0 ) {
         printf( "Use -h for help.\n" );
         return 1;
-    }
-
-    if ( myRodsArgs.echo == True ) {
-        echoFlag = 1;
-    }
-
-    if ( myRodsArgs.help == True && myRodsArgs.ttl == True ) {
-        usageTTL();
-        return 0;
     }
 
     if ( myRodsArgs.help == True ) {
@@ -106,6 +91,7 @@ int main( int argc, char **argv )
         printRodsEnv( stdout );
     }
 
+    rodsEnv my_env;
     status = getRodsEnv( &my_env );
     if ( status < 0 ) {
         rodsLog( LOG_ERROR, "main: getRodsEnv error. status = %d",
@@ -120,13 +106,6 @@ int main( int argc, char **argv )
             printf( "Time To Live value needs to be a positive integer\n" );
             return 1;
         }
-    }
-
-    ix = myRodsArgs.optind;
-
-    const char *password = nullptr;
-    if (ix < argc) {
-        password = argv[ix];
     }
 
     if ( myRodsArgs.longOption == True ) {
@@ -179,7 +158,7 @@ int main( int argc, char **argv )
             update_environment_file = true;
             printUpdateMsg();
         }
-        printf( "Enter your irods user name: " );
+        printf( "Enter your iRODS user name: " );
         std::string response;
         getline( std::cin, response );
         snprintf( my_env.rodsUserName, NAME_LEN, "%s", response.c_str() );
@@ -190,7 +169,7 @@ int main( int argc, char **argv )
             update_environment_file = true;
             printUpdateMsg();
         }
-        printf( "Enter your irods zone: " );
+        printf( "Enter your iRODS zone: " );
         std::string response;
         getline( std::cin, response );
         snprintf( my_env.rodsZone, NAME_LEN, "%s", response.c_str() );
@@ -201,7 +180,7 @@ int main( int argc, char **argv )
             update_environment_file = true;
             printUpdateMsg();
         }
-        printf( "Enter your irods authentication scheme: " );
+        printf( "Enter your iRODS authentication scheme: " );
         std::string response;
         getline( std::cin, response );
         snprintf( my_env.rodsAuthScheme, NAME_LEN, "%s", response.c_str() );
@@ -217,32 +196,38 @@ int main( int argc, char **argv )
     irods::pack_entry_table& pk_tbl  = irods::get_pack_table();
     init_api_table( api_tbl, pk_tbl );
 
+    rErrMsg_t errMsg;
     rcComm_t* comm = rcConnect(my_env.rodsHost, my_env.rodsPort, my_env.rodsUserName, my_env.rodsZone, 0, &errMsg);
     if (!comm) {
         rodsLog(LOG_ERROR, "Failed to connect to server.", my_env.rodsHost);
         return 2;
     }
 
-    auto ctx = nlohmann::json{
-        {irods::AUTH_TTL_KEY, std::to_string(ttl)}
-    };
+    rodsLog(LOG_NOTICE, fmt::format("Connected to server").data());
 
-    if (password) {
-        ctx[irods::AUTH_PASSWORD_KEY] = password;
-    }
+    auto ctx = nlohmann::json{{irods::AUTH_TTL_KEY, std::to_string(ttl)}};
 
-    if (const int ec = clientLogin(comm, ctx.dump().data()); ec != 0) {
-        rcDisconnect(comm);
-        return 7;
+    if (int ec = clientLogin(comm, ctx.dump().data()); ec != 0) {
+        // If the authentication fails, the password may have expired or changed. Remove the
+        // .irodsA file and prompt for the password again. The 1 means that the user should
+        // not be prompted to remove the file.
+        obfRmPw(1);
+        if (ec = clientLogin(comm, ctx.dump().data()); ec != 0) {
+            rcDisconnect(comm);
+            return 7;
+        }
     }
 
     rcDisconnect(comm);
+
+    rodsLog(LOG_NOTICE, fmt::format("Disconnected from server").data());
 
     if (!update_environment_file) {
         return 0;
     }
 
     /* Save updates to irods_environment.json. */
+    rodsLog(LOG_NOTICE, fmt::format("Saving updates to client environment JSON file").data());
     std::string env_file, session_file;
     if (auto ret = irods::get_json_environment_file(env_file, session_file); !ret.ok()) {
         printf("failed to get environment file - %ji\n", static_cast<intmax_t>(ret.code()));
@@ -281,23 +266,10 @@ int main( int argc, char **argv )
 
 
 void usage( char *prog ) {
-    printf("Validate the user's client environment by attempting authentication, and\n");
+    printf("Validate the user's client environment by attempting authentication,\n");
     printf("setting up the environment if it is missing or incomplete.\n");
-    printf( "Usage: %s [-ehvVl] [--ttl TimeToLive] [password]\n", prog );
-    printf( " -l  list the iRODS environment variables (only)\n" );
-    printf( " -v  verbose\n" );
-    printf( " -V  Very verbose\n" );
-    printf( "--ttl ttl  set the password Time To Live (specified in hours)\n" );
-    printf( "           Run 'iinit -h --ttl' for more\n" );
-    printf( " -h  this help\n" );
+    printf("Usage: %s [-hvVl] [--ttl TimeToLive]\n", prog);
     printf( "\n" );
-    printf( "Note that the password will be in clear-text if provided via the\n" );
-    printf( "command line.  Providing the password this way will bypass the\n" );
-    printf( "password prompt.\n" );
-    printReleaseInfo( "iinit" );
-}
-
-void usageTTL() {
     printf( "When using regular iRODS passwords you can use --ttl (Time To Live)\n" );
     printf( "to request a credential (a temporary password) that will be valid\n" );
     printf( "for only the number of hours you specify (up to a limit set by the\n" );
@@ -310,4 +282,11 @@ void usageTTL() {
     printf( "administrator (usually a few days).  With the --ttl option, you can\n" );
     printf( "specify how long this derived password will be valid, within the\n" );
     printf( "limits set by the administrator.\n" );
+    printf( "\n" );
+    printf("Options are:\n");
+    printf(" -l        list the iRODS environment variables (only)\n");
+    printf(" -V        verbose\n");
+    printf("--ttl TTL  set the password Time To Live (specified in hours)\n");
+    printf(" -h        this help\n");
+    printReleaseInfo("iinit");
 }
