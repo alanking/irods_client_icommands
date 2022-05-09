@@ -156,7 +156,7 @@ usage() {
         "                        writing to it still has the replica opened. Replicas",
         "                        which are intermediate cannot be opened for read or",
         "                        write, nor can they be unlinked or renamed.",
-        "   3. ?: write-locked - One of this replica's sibling replicas is actively",
+        "   4. ?: write-locked - One of this replica's sibling replicas is actively",
         "                        being written to but is itself at rest. Replicas which",
         "                        are write-locked cannot be opened for read or write",
         "                        nor can they be unlinked or renamed.",
