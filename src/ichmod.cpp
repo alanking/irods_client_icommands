@@ -176,7 +176,7 @@ usage() {
         " ",
         "Setting the ACCESS_LEVEL to 'null' will remove access for that USER_OR_GROUP.",
         " ",
-        "Multiple LOGICAL_PATHs can be entered at the same time."
+        "Multiple LOGICAL_PATHs can be entered at the same time.",
         " ",
         "If the entered path is a Collection, then the ACCESS_LEVEL to",
         "that Collection will be modified.  For example, 'write' granted to a",
