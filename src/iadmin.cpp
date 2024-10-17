@@ -2049,7 +2049,7 @@ void usageMain() {
         " lg [name] (list group info (user member list))",
         " lgd name  (list group details)",
         " mkuser Name[#Zone] Type (make user)",
-        " moduser Name[#Zone] [ type | comment | info | password ] newValue",
+        " moduser Name[#Zone] [ type | comment | info | password | password_hash ] newValue",
         " aua Name[#Zone] Auth-Name (add user authentication-name (GSI/Kerberos)",
         " rua Name[#Zone] Auth-Name (remove user authentication name (GSI/Kerberos)",
         " rpp Name  (remove PAM-derived Password for user Name)",
@@ -2214,7 +2214,7 @@ usage( char *subOpt ) {
 
 
     char *moduserMsgs[] = {
-        " moduser Name[#Zone] [ type | comment | info | password ] newValue",
+        " moduser Name[#Zone] [ type | comment | info | password | password_hash] newValue",
         "Modifies a field of an existing user definition.",
         "For password authentication, use moduser to set the password.",
         "(The password is transferred in a scrambled form to be more secure.)",

@@ -328,6 +328,7 @@ int main( int argc, char **argv )
     // TODO: use boost::program_options
     const auto configure_ssl = option_specified("--with-ssl", argc, argv);
     const auto prompt_auth_scheme = option_specified("--prompt-auth-scheme", argc, argv);
+    const auto use_password_hashing = option_specified("--use-hashed-password", argc, argv);
 
     status = parseCmdLineOpt( argc, argv, "hvVlZ", 1, &myRodsArgs );
     if ( status != 0 ) {
@@ -406,7 +407,7 @@ int main( int argc, char **argv )
         printf( "Using GSI, attempting connection/authentication\n" );
     }
 
-    if (std::string_view{ANONYMOUS_USER} != my_env.rodsUserName &&
+    if (!use_password_hashing && std::string_view{ANONYMOUS_USER} != my_env.rodsUserName &&
         scheme_uses_iinit_password_prompt(lower_scheme)) {
         if ( myRodsArgs.verbose == True ) {
             i = obfSavePw( 0, 1, 1, nullptr );
@@ -532,7 +533,8 @@ int main( int argc, char **argv )
         else {
             auto ctx = nlohmann::json{
                 {irods::AUTH_TTL_KEY, std::to_string(ttl)},
-                {irods_auth::force_password_prompt, true}
+                {irods_auth::force_password_prompt, true},
+                {"use_password_hash", use_password_hashing}
             };
 
             // Use the scheme override here to ensure that the authentication scheme in the environment is the same as
@@ -545,7 +547,7 @@ int main( int argc, char **argv )
             }
 
             printErrorStack(Conn->rError);
-            if (ttl > 0 && lower_scheme != PAM_INTERACTIVE_SCHEME && lower_scheme != PAM_PASSWORD_SCHEME) {
+            if (!use_password_hashing && ttl > 0 && lower_scheme != PAM_INTERACTIVE_SCHEME && lower_scheme != PAM_PASSWORD_SCHEME) {
                 status = clientLoginTTL(Conn, ttl);
                 if (status) {
                     print_error_stack_to_file(Conn->rError, stderr);
