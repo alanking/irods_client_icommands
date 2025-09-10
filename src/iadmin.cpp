@@ -1227,6 +1227,21 @@ doCommand( char *cmdToken[], rodsArguments_t* _rodsArgs = 0 ) {
     }
     if ( strcmp( cmdToken[0], "moduser" ) == 0 ) {
         if ( strcmp( cmdToken[2], "password" ) == 0 ) {
+            if (0 == strcmp(cmdToken[4], "no-scramble")) {
+                generalAdmin(0,
+                             "modify",
+                             "user",
+                             cmdToken[1],
+                             cmdToken[2],
+                             cmdToken[3],
+                             cmdToken[4],
+                             cmdToken[5],
+                             cmdToken[6],
+                             "",
+                             "");
+                return 0;
+            }
+
             int i, len, lcopy;
             /* this is a random string used to pad, arbitrary, but must match
                the server side: */
@@ -2056,23 +2071,29 @@ usage( char *subOpt ) {
         ""
     };
 
-
-    char *moduserMsgs[] = {
-        " moduser Name[#Zone] [ type | comment | info | password ] newValue",
-        "Modifies a field of an existing user definition.",
-        "For password authentication, use moduser to set the password.",
-        "(The password is transferred in a scrambled form to be more secure.)",
-        "Long forms of the field names may also be used:",
-        "user_name, user_type_name, zone_name, user_info, or ",
-        "r_comment",
-        "These are the names listed by 'lu' (and are the database table column names).",
-        "Modifying the user's name or zone is not allowed; instead remove the user and",
-        "create a new one.  rmuser/mkuser will remove (if empty) and create the needed",
-        "collections, too.",
-        "For GSI or Kerberos authentication, use 'aua' to add one or more",
-        "user auth names (GSI Distinquished Name (DN) or Kerberos principal name).",
-        ""
-    };
+    char* moduserMsgs[] = {" moduser Name[#Zone] [ type | comment | info | password ] newValue [no-scramble]",
+                           "Modifies a field of an existing user definition.",
+                           " ",
+                           "For password authentication, use moduser to set the password.",
+                           "By default, the password is transferred in a scrambled form to be more secure.",
+                           "Use the no-scramble option after the newValue parameter when setting the password",
+                           "to indicate that the password should not be scrambled before being sent to the",
+                           "server. This option is required when connected to servers running in FIPS mode.",
+                           "NOTE: The no-scramble option causes the password to be sent in plaintext.",
+                           "Please ensure TLS is in use when using this option. Using no-scramble with any",
+                           "field other than password has no effect. Using no-scramble with servers before",
+                           "iRODS 5.1.0 will result in users not being able to authenticate with that password.",
+                           " ",
+                           "Long forms of the field names may also be used:",
+                           "user_name, user_type_name, zone_name, user_info, or ",
+                           "r_comment",
+                           "These are the names listed by 'lu' (and are the database table column names).",
+                           "Modifying the user's name or zone is not allowed; instead remove the user and",
+                           "create a new one.  rmuser/mkuser will remove (if empty) and create the needed",
+                           "collections, too.",
+                           "For GSI or Kerberos authentication, use 'aua' to add one or more",
+                           "user auth names (GSI Distinquished Name (DN) or Kerberos principal name).",
+                           ""};
 
     char *auaMsgs[] = {
         " aua Name[#Zone] Auth-Name (add user authentication-name (GSI/Kerberos)",
